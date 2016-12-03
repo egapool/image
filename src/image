@@ -1,0 +1,75 @@
+#!/usr/bin/env php
+<?php
+
+ini_set('max_execution_time', 0);
+ini_set('memory_limit', -1);
+
+const FUNC_RESIZE = 'resize';
+const OPT_INPUT = 'i';
+const OPT_OUTPUT = 'o';
+const OPT_WIDTH = 'w';
+
+if (!ini_get('register_argc_argv')) {
+  errorOutput("Fatal: please enable register_argv_argc on your php.ini.", 254);
+}
+
+$func = end($argv);
+if ( is_null($func) || ($func !== FUNC_RESIZE) ) {
+  errorOutput("Fatal: SubCommand is required!", 253);
+}
+
+$opts = getopt('i:o:w:');
+
+if ( !isset($opts[OPT_INPUT]) ) {
+  errorOutput("-i(input) option is required!", 252);
+}
+if ( !isset($opts[OPT_WIDTH]) ) {
+  errorOutput("-w(width) option is required!", 252);
+}
+if ( !is_numeric($opts[OPT_WIDTH]) ) {
+  errorOutput("-w(width) option is must numbers!", 252);
+}
+
+var_dump($func,$options);die;
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use Intervention\Image\ImageManagerStatic as Image;
+
+
+Image::configure(array('driver' => 'gd'));
+
+$img = Image::make('foo.png');
+// $img = $img->resize(2378, 1736)->encode('jpg', 100)->save('bar.jpg');
+
+$img = $img->resize(1200,null, function ($constraint) {
+    $constraint->aspectRatio();
+    $constraint->upsize();
+})->save('resize.png');
+
+// $img = $img->crop(1000,1000,500,500)->save('crop.png');
+
+
+// $img->resizeCanvas(600, 200)->save('resizeCanvas.png');
+
+function errorOutput($msg,$code = 0 )
+{
+  fwrite(STDERR, <<<E
+Fatal: $msg
+
+E
+);
+  exit($code);
+}
+
+
+
+
+
+
+
+
+
+
+
+print "\n";
