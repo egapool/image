@@ -4,10 +4,12 @@
 ini_set('max_execution_time', 0);
 ini_set('memory_limit', -1);
 
-const FUNC_RESIZE = 'resize';
-const OPT_INPUT   = 'i';
-const OPT_OUTPUT  = 'o';
-const OPT_WIDTH   = 'w';
+const FUNC_RESIZE     = 'resize';
+const OPT_INPUT       = 'i';
+const OPT_DIRECTORY   = 'd';
+const OPT_OUTPUT      = 'o';
+const OPT_WIDTH       = 'w';
+$dir_mode             = false;
 
 if (!ini_get('register_argc_argv')) {
   errorOutput("Fatal: please enable register_argv_argc on your php.ini.", 254);
@@ -18,18 +20,33 @@ if ( is_null($func) || ($func !== FUNC_RESIZE) ) {
   errorOutput("Fatal: SubCommand is required!", 253);
 }
 
-$opts = getopt('i:o:w:');
+$opts = getopt('i:o:w:d:');
+// -iも-dも指定内はエラー
+if ( !isset($opts[OPT_INPUT]) && !isset($opts[OPT_DIRECTORY])) {
+  errorOutput("-i(input) or -d(directory) option is required!", 252);
+}
 
-if ( !isset($opts[OPT_INPUT]) ) {
-  errorOutput("-i(input) option is required!", 252);
+// -iも-dも指定ありはエラー
+if ( isset($opts[OPT_INPUT]) && isset($opts[OPT_DIRECTORY])) {
+  errorOutput("Only one of -w(width) and -d(directory)", 252);
 }
-if ( !isset($opts[OPT_WIDTH]) ) {
-  errorOutput("-w(width) option is required!", 252);
+
+// -dが指定されている場合はディレクトリモード
+if ( isset($opts[OPT_DIRECTORY])) {
+  if ( is_dir(getFullPath($opts[OPT_DIRECTORY])) ) {
+    $dir_mode = true;
+    $inputDir = getFullPath($opts[OPT_DIRECTORY]);
+  } else {
+    errorOutput("-d(directory) is not directory!", 252);
+  }
+  // ファイルモード
+} else {
+  $input = getFullPath($opts[OPT_INPUT]);
 }
+
 if ( !is_numeric($opts[OPT_WIDTH]) ) {
   errorOutput("-w(width) option is must numbers!", 252);
 }
-$input = getFullPath($opts[OPT_INPUT]);
 
 $width = $opts[OPT_WIDTH];
 
@@ -39,12 +56,25 @@ use Intervention\Image\ImageManagerStatic as Image;
 
 Image::configure(array('driver' => 'gd'));
 
-resize($input,$width);
+if ( $dir_mode ) {
+  $files = getFileList($inputDir);
+  $newDirBasename = basename($inputDir)."_".$width;
+  $newDirFullPath = $inputDir."/../".$newDirBasename;
+  if ( is_dir($newDirFullPath) ) errorOutput("new directory is already exists!", 252);
+  mkdir($newDirFullPath);
+
+  foreach( $files as $f ) {
+    resize($f,$width,$newDirFullPath);
+  }
+  print count($files)."ファイル完了\n";
+} else {
+  resize($input,$width);
+}
 
 function errorOutput($msg,$code = 0 )
 {
   fwrite(STDERR, <<<E
-Fatal: $msg
+$msg
 
 E
 );
@@ -60,15 +90,37 @@ function getFullPath($filePath)
   return getcwd()."/./".$filePath;
 }
 
-function resize($filePath,$maxWidth,$output = '')
+function resize($filePath,$maxWidth,$outputIDr = '')
 {
   $img = Image::make($filePath);
   list($inputName,$inputExt) = explode(".",basename($filePath));
-  $out = $output ? $output : $inputName."_".$maxWidth.".".$inputExt;
+  $out = ($outputIDr ? $outputIDr : ".") . "/".$inputName."_".$maxWidth.".".$inputExt;
   $img = $img->resize($maxWidth,null, function ($constraint) {
       $constraint->aspectRatio();
       $constraint->upsize();
   })->save($out);
+}
+
+function getFileList($dir) {
+    $files = scandir($dir);
+    $files = array_filter($files, function ($file) {
+      if ( substr($file,0,1) === "." ) return false;
+      if ( in_array(pathinfo($filename, PATHINFO_EXTENSION), ['png','jpg','gif','jpeg'])) return false;
+        return true;
+    });
+
+    $list = array();
+    foreach ($files as $file) {
+        $fullpath = rtrim($dir, '/') . '/' . $file;
+        if (is_file($fullpath)) {
+            $list[] = $fullpath;
+        }
+        if (is_dir($fullpath)) {
+            $list = array_merge($list, getFileList($fullpath));
+        }
+    }
+
+    return $list;
 }
 
 print "\n";
